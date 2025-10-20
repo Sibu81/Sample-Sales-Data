@@ -1,0 +1,81 @@
+https://www.kaggle.com/datasets/kyanyoga/sample-sales-data?resource=download
+
+
+# sales_etl_mysql.py
+import pandas as pd
+from sqlalchemy import create_engine
+
+# -------------------------
+# Step 1: Load CSV
+# -------------------------
+file_path = r"C:/Users/SARTHAK/Downloads/sales_data_sample.csv"
+df = pd.read_csv(file_path, encoding='latin1')  # fix Unicode issues
+
+# -------------------------
+# Step 2: Clean Data
+# -------------------------
+
+# Convert ORDERDATE to datetime
+df['ORDERDATE'] = pd.to_datetime(df['ORDERDATE'], errors='coerce')
+
+# Fill missing values
+df['ADDRESSLINE2'].fillna('', inplace=True)
+df['STATE'].fillna('Unknown', inplace=True)
+df['POSTALCODE'].fillna('Unknown', inplace=True)
+df['TERRITORY'].fillna('Unknown', inplace=True)
+
+# Remove duplicates
+df.drop_duplicates(inplace=True)
+
+# Derived columns
+df['TotalSales'] = df['QUANTITYORDERED'] * df['PRICEEACH']
+df['Year'] = df['ORDERDATE'].dt.year
+df['Month'] = df['ORDERDATE'].dt.month
+
+# -------------------------
+# Step 3: Connect to MySQL
+# -------------------------
+# Replace username, password, host, port, dbname with your info
+engine = create_engine("mysql+pymysql://root:MyPassword123@localhost:3306/sales_db")
+
+# Load cleaned data into MySQL
+df.to_sql('sales_data', con=engine, if_exists='replace', index=False)
+print("✅ Data loaded into MySQL successfully!")
+
+# -------------------------
+# Step 4: Run Sample Queries
+# -------------------------
+
+# Top 10 products by sales
+query_top_products = """
+SELECT PRODUCTCODE, SUM(TotalSales) AS TotalSales
+FROM sales_data
+GROUP BY PRODUCTCODE
+ORDER BY TotalSales DESC
+LIMIT 10;
+"""
+top_products = pd.read_sql(query_top_products, con=engine)
+print("\n--- Top 10 Products by Sales ---")
+print(top_products)
+
+# Revenue by country
+query_country = """
+SELECT COUNTRY, SUM(TotalSales) AS TotalSales
+FROM sales_data
+GROUP BY COUNTRY
+ORDER BY TotalSales DESC;
+"""
+revenue_country = pd.read_sql(query_country, con=engine)
+print("\n--- Revenue by Country ---")
+print(revenue_country)
+
+# Monthly sales trend
+query_monthly = """
+SELECT Year, Month, SUM(TotalSales) AS TotalSales
+FROM sales_data
+GROUP BY Year, Month
+ORDER BY Year, Month;
+"""
+monthly_sales = pd.read_sql(query_monthly, con=engine)
+print("\n--- Monthly Sales Trend ---")
+print(monthly_sales)
